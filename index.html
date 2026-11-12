@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
 <title>XAU 交易紀錄</title>
 <meta name="theme-color" content="#0f1115">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -20,8 +20,12 @@
     <div><span>24h 低</span><b id="lo24">—</b></div>
   </div>
 </header>
+<nav class="tabs" id="tabs">
+  <a href="#" data-page="main" class="on">📈 主頁</a>
+  <a href="#settings" data-page="settings">⚙️ 設定</a>
+</nav>
 
-<main>
+<main id="page-main" class="page">
   <section class="card stats" id="stats"></section>
 
   <section class="card">
@@ -66,16 +70,40 @@
   <section class="card">
     <div class="row between">
       <h2>歷史紀錄</h2>
-      <div class="row gap">
-        <button class="ghost small" id="exportBtn">匯出</button>
-        <label class="ghost small filebtn">匯入<input type="file" id="importFile" accept="application/json"></label>
-      </div>
     </div>
     <div class="row between selbar" id="selBar">
       <label class="chk"><input type="checkbox" id="selAll"> 全選</label>
       <button class="ghost small danger" id="delSelBtn" disabled>刪除已選</button>
     </div>
     <div id="histList" class="list"></div>
+  </section>
+
+</main>
+
+<main id="page-settings" class="page hidden">
+  <section class="card">
+    <h2>帳戶與風險</h2>
+    <div class="grid2">
+      <label>起始資金 (U)<input id="sInitial" inputmode="decimal"></label>
+      <label>每單風險 (% of 帳戶最高點)<input id="sRisk" inputmode="decimal"></label>
+    </div>
+    <div class="preview" id="settingsSummary"></div>
+    <p class="muted">每單虧損 = 帳戶最高點 × 風險%；獲利 = 虧損 × RR。帳戶最高點 = 起始資金加上歷史已結單損益的最高值。</p>
+  </section>
+
+  <section class="card">
+    <h2>通知</h2>
+    <p class="muted">止盈、止損、掛單成交時跳出系統通知（網頁需開著）。</p>
+    <button class="ghost small" id="notifyBtn">開啟結單通知</button>
+  </section>
+
+  <section class="card">
+    <h2>資料備份</h2>
+    <p class="muted">資料存在這個瀏覽器，換裝置或清快取前請先匯出；匯入會覆蓋目前資料。</p>
+    <div class="row gap">
+      <button class="ghost small" id="exportBtn">匯出 JSON</button>
+      <label class="ghost small filebtn">匯入 JSON<input type="file" id="importFile" accept="application/json"></label>
+    </div>
   </section>
 
   <section class="card">
@@ -89,18 +117,9 @@
     <div id="trashList" class="list"></div>
   </section>
 
-  <section class="card">
-    <h2>設定</h2>
-    <div class="grid2">
-      <label>起始資金 (U)<input id="sInitial" inputmode="decimal"></label>
-      <label>每單風險 (% of 帳戶最高點)<input id="sRisk" inputmode="decimal"></label>
-    </div>
-    <p class="muted">每單虧損 = 帳戶最高點 × 風險%；獲利 = 虧損 × RR。帳戶最高點 = 起始資金加上歷史已結單損益的最高值。資料存在這個瀏覽器，換裝置請用匯出／匯入。</p>
-    <button class="ghost small" id="notifyBtn">開啟結單通知</button>
-  </section>
 </main>
 
 <div id="toast" class="toast"></div>
-<script src="app.js?v=2"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

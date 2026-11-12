@@ -447,7 +447,30 @@ function renderStats() {
     <div class="stat"><span>距最高點回撤</span><b class="${cls(s.dd)}">${fmt(s.dd)}%</b></div>
     <div class="stat"><span>平均每單 R</span><b class="${cls(s.avgR)}">${s.avgR == null ? '—' : sign(s.avgR) + 'R'}</b></div>
     <div class="stat"><span>實際盈虧比</span><b>${s.realRR == null ? '—' : fmt(s.realRR)}</b></div>`;
+  $('settingsSummary').innerHTML = `
+    <div><span>目前權益</span><b>${fmt(s.equity)} U</b></div>
+    <div><span>帳戶最高點</span><b>${fmt(s.peak)} U</b></div>
+    <div><span>下一單可虧</span><b class="down">${fmt(s.risk)} U</b></div>`;
 }
+
+/* ========== 分頁 ========== */
+function route() {
+  const page = location.hash === '#settings' ? 'settings' : 'main';
+  document.querySelectorAll('.page').forEach((p) => p.classList.toggle('hidden', p.id !== 'page-' + page));
+  document.querySelectorAll('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.page === page));
+  if (page === 'main') requestAnimationFrame(() => {
+    if (!$('equityChart').classList.contains('hidden')) renderEquity();
+  });
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+document.querySelector('#tabs a[data-page="main"]').addEventListener('click', (ev) => {
+  // 用 '#' 會留一個空 hash，改成乾淨網址
+  ev.preventDefault();
+  history.pushState(null, '', location.pathname + location.search);
+  route();
+});
+window.addEventListener('popstate', route);
 
 function tradeCard(t, mode = 'list') {
   const L = t.side === 'long';
@@ -504,6 +527,8 @@ function renderLists() {
   $('trashList').innerHTML = trash.length ? trash.map((t) => tradeCard(t, 'trash')).join('') : '<div class="empty">垃圾桶是空的</div>';
   $('trashCount').textContent = trash.length ? `（${trash.length}）` : '';
   $('restoreAllBtn').disabled = $('emptyTrashBtn').disabled = !trash.length;
+  const tab = document.querySelector('#tabs a[data-page="settings"]');
+  tab.innerHTML = '⚙️ 設定' + (trash.length ? `<span class="cnt" title="垃圾桶">${trash.length}</span>` : '');
   renderOpenPnl();
 }
 
@@ -673,6 +698,7 @@ function escapeHtml(s) { return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<
 /* ========== 啟動 ========== */
 renderSettings();
 renderAll();
+route();
 initChart();
 connectWS();
 backfill();
