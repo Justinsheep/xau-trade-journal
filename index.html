@@ -71,7 +71,22 @@
         <label class="ghost small filebtn">匯入<input type="file" id="importFile" accept="application/json"></label>
       </div>
     </div>
+    <div class="row between selbar" id="selBar">
+      <label class="chk"><input type="checkbox" id="selAll"> 全選</label>
+      <button class="ghost small danger" id="delSelBtn" disabled>刪除已選</button>
+    </div>
     <div id="histList" class="list"></div>
+  </section>
+
+  <section class="card">
+    <div class="row between">
+      <h2>🗑 垃圾桶 <span class="muted" id="trashCount"></span></h2>
+      <div class="row gap">
+        <button class="ghost small" id="restoreAllBtn">全部復原</button>
+        <button class="ghost small danger" id="emptyTrashBtn">一鍵清空</button>
+      </div>
+    </div>
+    <div id="trashList" class="list"></div>
   </section>
 
   <section class="card">

@@ -64,6 +64,13 @@ label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute
 .filebtn input{display:none}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(120px);background:#222838;border:1px solid var(--line);padding:10px 16px;border-radius:10px;transition:transform .25s;z-index:20;max-width:90vw}
 .toast.show{transform:translateX(-50%) translateY(0)}
+.danger{color:var(--down);border-color:rgba(239,68,68,.4)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.selbar{margin-bottom:8px}
+.chk{flex-direction:row;align-items:center;gap:6px;color:var(--text);cursor:pointer}
+.chk input,.trade .pick{width:18px;height:18px;padding:0;accent-color:var(--accent);cursor:pointer}
+.trade.sel{border-color:var(--accent)}
+.trade.trashed{opacity:.75}
 .empty{color:var(--muted);font-size:13px;text-align:center;padding:12px}
 @media (max-width:640px){
   .stats{grid-template-columns:repeat(2,1fr)}

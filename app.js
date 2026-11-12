@@ -28,10 +28,11 @@ let lastTickTs = 0;
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (s && s.trades) return s;
+    if (s && s.trades) { s.trash = s.trash || []; return s; }
   } catch (e) {}
-  return { settings: { initial: 100, riskPct: 10 }, trades: [] };
+  return { settings: { initial: 100, riskPct: 10 }, trades: [], trash: [] };
 }
+const selected = new Set(); // 歷史紀錄多選
 let saveTimer = null;
 function save(now = true) {
   const doSave = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} };
@@ -354,7 +355,13 @@ function initChart() {
     wickUpColor: '#22c55e', wickDownColor: '#ef4444',
     priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
   });
-  eqChart = LightweightCharts.createChart($('equityChart'), opts);
+  // 權益曲線 X 軸用「第幾單」，每單等距，不會因為時間差擠在一起
+  const eqLabel = (t) => (t === 0 ? '起始' : `第 ${t} 單`);
+  eqChart = LightweightCharts.createChart($('equityChart'), {
+    ...opts,
+    timeScale: { ...opts.timeScale, timeVisible: false, tickMarkFormatter: eqLabel },
+    localization: { timeFormatter: eqLabel },
+  });
   eqSeries = eqChart.addAreaSeries({ lineColor: '#e8b84a', topColor: 'rgba(232,184,74,.3)', bottomColor: 'rgba(232,184,74,0)', lineWidth: 2 });
   loadBars();
 }
@@ -398,14 +405,8 @@ $('toggleEquity').onclick = () => {
 function renderEquity() {
   if (!eqSeries) return;
   const { curve } = account();
-  const pts = [];
-  for (const p of curve) {
-    let t = Math.floor(p.t / 1000) + TZ_OFF;
-    if (pts.length && t <= pts[pts.length - 1].time) t = pts[pts.length - 1].time + 1;
-    pts.push({ time: t, value: +p.v.toFixed(2) });
-  }
-  eqSeries.setData(pts);
-  eqChart.timeScale().fitContent();
+  eqSeries.setData(curve.map((p, i) => ({ time: i, value: +p.v.toFixed(2) })));
+  requestAnimationFrame(() => eqChart.timeScale().fitContent());
 }
 
 function drawTradeLines() {
@@ -448,14 +449,15 @@ function renderStats() {
     <div class="stat"><span>實際盈虧比</span><b>${s.realRR == null ? '—' : fmt(s.realRR)}</b></div>`;
 }
 
-function tradeCard(t) {
+function tradeCard(t, mode = 'list') {
   const L = t.side === 'long';
   const closed = t.status === 'closed';
+  const inTrash = mode === 'trash';
   const st = t.status === 'pending' ? '掛單中' : t.status === 'open' ? '持倉中' : t.reason === 'TP' ? '止盈' : t.reason === 'SL' ? (t.pnl > 0 ? '移動止損' : t.pnl === 0 ? '保本' : '止損') : '手動平倉';
   const stCls = closed ? (t.pnl > 0 ? 'b-win' : t.pnl < 0 ? 'b-loss' : 'b-st') : 'b-st';
   const right = closed
     ? `<span class="pnl ${cls(t.pnl)}">${sign(t.pnl)} U <small>(${sign(t.pnl / t.risk)}R)</small></span>`
-    : t.status === 'open' ? `<span class="pnl live" data-id="${t.id}">—</span>` : '';
+    : t.status === 'open' && !inTrash ? `<span class="pnl live" data-id="${t.id}">—</span>` : '';
   const kv = [
     ['進場', fmtPx(t.entry)], ['止損', fmtPx(t.sl) + (t.sl !== t.slOrig ? ` <small class="muted">(原 ${fmtPx(t.slOrig)})</small>` : '')],
     ['止盈', fmtPx(t.tp)], ['RR', fmt(t.rr)],
@@ -464,14 +466,19 @@ function tradeCard(t) {
     closed ? ['出場', fmtPx(t.exit)] : ['建立', fmtTime(t.createdAt)],
   ];
   if (closed) kv.push(['進場時間', t.openedAt ? fmtTime(t.openedAt) : '—'], ['結單時間', fmtTime(t.closedAt)]);
-  const acts = closed
+  const acts = inTrash
+    ? `<button class="ghost small" data-act="restore" data-id="${t.id}">復原</button>
+       <button class="ghost small danger" data-act="purge" data-id="${t.id}">永久刪除</button>`
+    : closed
     ? `<button class="ghost small" data-act="del" data-id="${t.id}">刪除</button>`
     : `${t.status === 'open' ? `<button class="ghost small" data-act="close" data-id="${t.id}">以現價平倉</button><button class="ghost small" data-act="be" data-id="${t.id}">止損移到保本</button>` : ''}
        <button class="ghost small" data-act="edit" data-id="${t.id}">改止盈止損</button>
        <button class="ghost small" data-act="${t.status === 'pending' ? 'cancel' : 'del'}" data-id="${t.id}">${t.status === 'pending' ? '取消掛單' : '刪除'}</button>`;
-  return `<div class="trade">
+  const pick = mode === 'hist' ? `<input type="checkbox" class="pick" data-id="${t.id}" ${selected.has(t.id) ? 'checked' : ''} aria-label="選取">` : '';
+  const delInfo = inTrash ? `<span class="muted">刪除於 ${fmtTime(t.deletedAt)}</span>` : '';
+  return `<div class="trade${selected.has(t.id) && mode === 'hist' ? ' sel' : ''}${inTrash ? ' trashed' : ''}">
     <div class="head">
-      <div class="row gap"><span class="badge ${L ? 'b-long' : 'b-short'}">${L ? '多' : '空'}</span><span class="badge ${stCls}">${st}</span><span class="muted">${fmtTime(closed ? t.closedAt : t.createdAt)}</span></div>
+      <div class="row gap">${pick}<span class="badge ${L ? 'b-long' : 'b-short'}">${L ? '多' : '空'}</span>${delInfo}<span class="badge ${stCls}">${st}</span><span class="muted">${fmtTime(closed ? t.closedAt : t.createdAt)}</span></div>
       ${right}
     </div>
     <div class="kv">${kv.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>
@@ -484,10 +491,69 @@ function tradeCard(t) {
 function renderLists() {
   const active = state.trades.filter((t) => t.status === 'open' || t.status === 'pending').sort((a, b) => b.createdAt - a.createdAt);
   const hist = state.trades.filter(isClosed).sort((a, b) => b.closedAt - a.closedAt);
-  $('openList').innerHTML = active.length ? active.map(tradeCard).join('') : '<div class="empty">沒有持倉</div>';
-  $('histList').innerHTML = hist.length ? hist.map(tradeCard).join('') : '<div class="empty">還沒有結單紀錄</div>';
+  $('openList').innerHTML = active.length ? active.map((t) => tradeCard(t)).join('') : '<div class="empty">沒有持倉</div>';
+  // 多選：清掉已不在歷史裡的 id
+  for (const id of [...selected]) if (!hist.some((t) => t.id === id)) selected.delete(id);
+  $('histList').innerHTML = hist.length ? hist.map((t) => tradeCard(t, 'hist')).join('') : '<div class="empty">還沒有結單紀錄</div>';
+  $('selBar').style.display = hist.length ? '' : 'none';
+  $('selAll').checked = hist.length > 0 && selected.size === hist.length;
+  $('selAll').indeterminate = selected.size > 0 && selected.size < hist.length;
+  $('delSelBtn').disabled = !selected.size;
+  $('delSelBtn').textContent = selected.size ? `刪除已選（${selected.size}）` : '刪除已選';
+  const trash = [...state.trash].sort((a, b) => b.deletedAt - a.deletedAt);
+  $('trashList').innerHTML = trash.length ? trash.map((t) => tradeCard(t, 'trash')).join('') : '<div class="empty">垃圾桶是空的</div>';
+  $('trashCount').textContent = trash.length ? `（${trash.length}）` : '';
+  $('restoreAllBtn').disabled = $('emptyTrashBtn').disabled = !trash.length;
   renderOpenPnl();
 }
+
+/* ========== 垃圾桶 ========== */
+function moveToTrash(ids) {
+  const set = new Set(ids);
+  const now = Date.now();
+  for (const t of state.trades) if (set.has(t.id)) state.trash.push({ ...t, deletedAt: now });
+  state.trades = state.trades.filter((t) => !set.has(t.id));
+  ids.forEach((id) => selected.delete(id));
+}
+function restoreFromTrash(ids) {
+  const set = new Set(ids);
+  for (const t of state.trash) if (set.has(t.id)) { const { deletedAt, ...rest } = t; state.trades.push(rest); }
+  state.trash = state.trash.filter((t) => !set.has(t.id));
+  // 復原的持倉 / 掛單，刪除期間的價格要用 K 線補判斷
+  lastBackfillTry = 0; backfill();
+}
+
+$('selAll').onchange = (ev) => {
+  const hist = state.trades.filter(isClosed);
+  selected.clear();
+  if (ev.target.checked) hist.forEach((t) => selected.add(t.id));
+  renderLists();
+};
+$('histList').addEventListener('change', (ev) => {
+  const c = ev.target.closest('input.pick');
+  if (!c) return;
+  c.checked ? selected.add(c.dataset.id) : selected.delete(c.dataset.id);
+  renderLists();
+});
+$('delSelBtn').onclick = () => {
+  if (!selected.size) return;
+  if (!confirm(`把 ${selected.size} 筆紀錄移到垃圾桶？`)) return;
+  const n = selected.size;
+  moveToTrash([...selected]);
+  save(); renderAll(); toast(`已把 ${n} 筆移到垃圾桶`);
+};
+$('restoreAllBtn').onclick = () => {
+  if (!state.trash.length) return;
+  const n = state.trash.length;
+  restoreFromTrash(state.trash.map((t) => t.id));
+  save(); renderAll(); toast(`已復原 ${n} 筆`);
+};
+$('emptyTrashBtn').onclick = () => {
+  if (!state.trash.length) return;
+  if (!confirm(`永久刪除垃圾桶裡的 ${state.trash.length} 筆紀錄？這個動作無法復原。`)) return;
+  state.trash = [];
+  save(); renderAll(); toast('垃圾桶已清空');
+};
 
 function renderOpenPnl() {
   if (lastPrice == null) return;
@@ -514,9 +580,19 @@ function renderAll() {
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest('button[data-act]');
   if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'restore' || act === 'purge') {
+    const t = state.trash.find((x) => x.id === b.dataset.id);
+    if (!t) return;
+    if (act === 'restore') { restoreFromTrash([t.id]); toast('已復原'); }
+    else {
+      if (!confirm('永久刪除這筆紀錄？無法復原。')) return;
+      state.trash = state.trash.filter((x) => x !== t);
+    }
+    save(); renderAll(); return;
+  }
   const t = state.trades.find((x) => x.id === b.dataset.id);
   if (!t) return;
-  const act = b.dataset.act;
   if (act === 'close') {
     if (lastPrice == null) return toast('還沒有即時價格');
     if (!confirm(`以現價 ${fmtPx(lastPrice)} 平倉？`)) return;
@@ -530,12 +606,9 @@ document.addEventListener('click', (ev) => {
     const L = t.side === 'long';
     if (L ? !(p > s) : !(p < s)) return toast('止盈止損方向不對');
     t.sl = s; t.tp = p;
-  } else if (act === 'cancel') {
-    if (!confirm('取消這張掛單？')) return;
-    state.trades = state.trades.filter((x) => x !== t);
-  } else if (act === 'del') {
-    if (!confirm('刪除這筆紀錄？會影響統計與帳戶最高點。')) return;
-    state.trades = state.trades.filter((x) => x !== t);
+  } else if (act === 'cancel' || act === 'del') {
+    moveToTrash([t.id]);
+    toast(act === 'cancel' ? '掛單已取消，移到垃圾桶' : '已移到垃圾桶，可在下方復原');
   }
   save(); renderAll();
   if (lastPrice && act === 'edit') checkTrades(lastPrice, Date.now());
@@ -554,20 +627,23 @@ $('exportBtn').onclick = () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `xau-journal-${new Date().toISOString().slice(0, 10)}.json`;
+  const d = new Date(), p2 = (x) => String(x).padStart(2, '0');
+  a.download = `xau-journal-${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 $('importFile').onchange = async (ev) => {
-  const f = ev.target.files[0]; if (!f) return;
+  const f = ev.target.files[0];
+  ev.target.value = ''; // 先清掉，取消後再選同一個檔案也能觸發
+  if (!f) return;
   try {
     const s = JSON.parse(await f.text());
     if (!s.trades || !s.settings) throw new Error('格式不對');
     if (!confirm(`匯入 ${s.trades.length} 筆紀錄，會覆蓋目前資料，確定？`)) return;
-    state = s; save(); renderSettings(); renderAll(); backfill();
+    s.trash = s.trash || [];
+    state = s; selected.clear(); save(); renderSettings(); renderAll(); backfill();
     toast('匯入完成');
   } catch (e) { toast('匯入失敗：' + e.message); }
-  ev.target.value = '';
 };
 
 $('notifyBtn').onclick = async () => {
@@ -602,3 +678,6 @@ connectWS();
 backfill();
 setInterval(backfill, 30e3);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) backfill(); });
+window.addEventListener('resize', () => {
+  if (eqChart && !$('equityChart').classList.contains('hidden')) requestAnimationFrame(() => eqChart.timeScale().fitContent());
+});
