@@ -89,6 +89,9 @@ code{background:#12151b;border-radius:4px;padding:1px 5px;font-size:12px;color:v
 .macts button{padding:9px 16px;border-radius:9px;font-weight:600}
 .mok{background:var(--accent);border:0}
 .mdanger{background:var(--down);border:0}
+.formacts{display:flex;gap:8px;margin-top:10px}
+.formacts .primary{margin-top:0;flex:1}
+.formacts .ghost{padding:12px 18px;border-radius:10px;font-weight:600}
 .danger{color:var(--down);border-color:rgba(239,68,68,.4)}
 button:disabled{opacity:.4;cursor:not-allowed}
 .selbar{margin-bottom:8px}

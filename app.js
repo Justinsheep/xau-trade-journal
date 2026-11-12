@@ -115,6 +115,12 @@ fEntry.addEventListener('input', () => syncForm('entry'));
 fSl.addEventListener('input', () => syncForm('sl'));
 fTp.addEventListener('input', () => syncForm('tp'));
 fRr.addEventListener('input', () => syncForm('rr'));
+$('clearBtn').onclick = () => {
+  fEntry.value = fSl.value = fTp.value = fRr.value = $('fNote').value = '';
+  lastEdited = 'tp';
+  renderPreview();
+  fEntry.focus();
+};
 $('useLast').onclick = () => { if (lastPrice) { fEntry.value = lastPrice.toFixed(1); syncForm('entry'); } };
 document.querySelectorAll('#orderType button').forEach((b) => b.onclick = () => {
   orderType = b.dataset.v;

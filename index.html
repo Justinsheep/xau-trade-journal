@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
 <title>XAU 交易紀錄</title>
 <meta name="theme-color" content="#0f1115">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -56,7 +56,10 @@
       </div>
       <label>備註<input id="fNote" placeholder="選填"></label>
       <div id="preview" class="preview"></div>
-      <button type="submit" class="primary" id="submitBtn">送出紀錄</button>
+      <div class="formacts">
+        <button type="button" class="ghost" id="clearBtn">清除</button>
+        <button type="submit" class="primary" id="submitBtn">送出紀錄</button>
+      </div>
     </form>
   </section>
 
@@ -159,6 +162,6 @@
 </main>
 
 <div id="toast" class="toast"></div>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
