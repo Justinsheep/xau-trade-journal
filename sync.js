@@ -113,13 +113,21 @@
   // 啟動：先拿登入狀態並做第一次同步（app.js 的回補會等這個完成）
   window.initialSync = (async () => {
     renderUI();
+    try {
+      if (sessionStorage.getItem('xau-after-login')) {
+        sessionStorage.removeItem('xau-after-login');
+        if (location.hash !== '#settings') location.hash = '#settings';
+      }
+    } catch (e) {}
     const { data } = await client.auth.getSession();
     await onSession(data.session);
   })();
   client.auth.onAuthStateChange((_evt, session) => { setTimeout(() => onSession(session), 0); });
 
   el('loginBtn').onclick = async () => {
-    const redirectTo = location.origin + location.pathname + '#settings';
+    // 轉址網址不帶 #，比對 Supabase 白名單比較穩；回來後再自動切到設定頁
+    const redirectTo = location.origin + location.pathname;
+    try { sessionStorage.setItem('xau-after-login', 'settings'); } catch (e) {}
     const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
     if (error) toast('登入失敗：' + error.message);
   };
