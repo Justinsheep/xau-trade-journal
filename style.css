@@ -80,6 +80,15 @@ code{background:#12151b;border-radius:4px;padding:1px 5px;font-size:12px;color:v
 .btable th{color:var(--muted);font-weight:500}
 .btable tr.bad td{color:var(--down)}
 .bwrap{overflow-x:auto}
+.modal{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+.mbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:10px}
+.mbox h3{margin:0;font-size:17px}
+.mbox p{margin:0;color:var(--muted);font-size:14px}
+.merr{color:var(--down);font-size:13px;min-height:0}
+.macts{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+.macts button{padding:9px 16px;border-radius:9px;font-weight:600}
+.mok{background:var(--accent);border:0}
+.mdanger{background:var(--down);border:0}
 .danger{color:var(--down);border-color:rgba(239,68,68,.4)}
 button:disabled{opacity:.4;cursor:not-allowed}
 .selbar{margin-bottom:8px}

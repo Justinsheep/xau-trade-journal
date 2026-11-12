@@ -689,9 +689,9 @@ function renderBulk() {
   $('bulkSubmit').textContent = bulkTrades.length ? `全部加入（${bulkTrades.length} 筆）` : '全部加入';
 }
 $('bulkText').addEventListener('input', renderBulk);
-$('bulkSubmit').onclick = () => {
+$('bulkSubmit').onclick = async () => {
   if (!bulkTrades.length) return;
-  if (!confirm(`把 ${bulkTrades.length} 筆加入歷史紀錄？`)) return;
+  if (!await ask('批次加入', `把 ${bulkTrades.length} 筆加入歷史紀錄？`, '加入')) return;
   const n = bulkTrades.length;
   state.trades.push(...bulkTrades);
   save(); renderAll();
@@ -727,9 +727,9 @@ $('histList').addEventListener('change', (ev) => {
   c.checked ? selected.add(c.dataset.id) : selected.delete(c.dataset.id);
   renderLists();
 });
-$('delSelBtn').onclick = () => {
+$('delSelBtn').onclick = async () => {
   if (!selected.size) return;
-  if (!confirm(`把 ${selected.size} 筆紀錄移到垃圾桶？`)) return;
+  if (!await ask('刪除已選', `把 ${selected.size} 筆紀錄移到垃圾桶？之後可以在設定頁的垃圾桶復原。`, '移到垃圾桶', true)) return;
   const n = selected.size;
   moveToTrash([...selected]);
   save(); renderAll(); toast(`已把 ${n} 筆移到垃圾桶`);
@@ -740,9 +740,9 @@ $('restoreAllBtn').onclick = () => {
   restoreFromTrash(state.trash.map((t) => t.id));
   save(); renderAll(); toast(`已復原 ${n} 筆`);
 };
-$('emptyTrashBtn').onclick = () => {
+$('emptyTrashBtn').onclick = async () => {
   if (!state.trash.length) return;
-  if (!confirm(`永久刪除垃圾桶裡的 ${state.trash.length} 筆紀錄？這個動作無法復原。`)) return;
+  if (!await ask('清空垃圾桶？', `垃圾桶裡的 ${state.trash.length} 筆紀錄會永久刪除，無法復原。`, '永久清空', true)) return;
   state.trash = [];
   save(); renderAll(); toast('垃圾桶已清空');
 };
@@ -768,8 +768,39 @@ function renderAll() {
   if (!$('equityChart').classList.contains('hidden')) renderEquity();
 }
 
+/* ========== 頁內對話框 ========== */
+// 不用 window.confirm / prompt：部分瀏覽器（App 內建瀏覽器、嵌入頁面）會直接擋掉並回傳「取消」
+function openDialog({ title, msg = '', fields = [], ok = '確定', danger = false }) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'modal';
+    wrap.innerHTML = `<div class="mbox" role="dialog" aria-modal="true">
+      <h3>${title}</h3>${msg ? `<p>${msg}</p>` : ''}
+      ${fields.map((f, i) => `<label>${f.label}<input data-i="${i}" inputmode="decimal" value="${f.value ?? ''}"></label>`).join('')}
+      <div class="merr"></div>
+      <div class="macts"><button type="button" class="ghost" data-m="no">取消</button><button type="button" class="${danger ? 'mdanger' : 'mok'}" data-m="yes">${ok}</button></div>
+    </div>`;
+    const done = (v) => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const submit = () => {
+      if (!fields.length) return done(true);
+      const vals = fields.map((f, i) => num(wrap.querySelector(`input[data-i="${i}"]`).value));
+      if (vals.some((v) => !(v > 0))) { wrap.querySelector('.merr').textContent = '請填數字'; return; }
+      done(vals);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') done(fields.length ? null : false); if (e.key === 'Enter') submit(); };
+    wrap.addEventListener('click', (e) => {
+      if (e.target === wrap || e.target.dataset.m === 'no') done(fields.length ? null : false);
+      else if (e.target.dataset.m === 'yes') submit();
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    (wrap.querySelector('input') || wrap.querySelector('[data-m="yes"]')).focus();
+  });
+}
+const ask = (title, msg, ok, danger) => openDialog({ title, msg, ok, danger });
+
 /* ========== 動作 ========== */
-document.addEventListener('click', (ev) => {
+document.addEventListener('click', async (ev) => {
   const b = ev.target.closest('button[data-act]');
   if (!b) return;
   const act = b.dataset.act;
@@ -778,8 +809,8 @@ document.addEventListener('click', (ev) => {
     if (!t) return;
     if (act === 'restore') { restoreFromTrash([t.id]); toast('已復原'); }
     else {
-      if (!confirm('永久刪除這筆紀錄？無法復原。')) return;
-      state.trash = state.trash.filter((x) => x !== t);
+      if (!await ask('永久刪除？', '這筆紀錄會永久刪除，無法復原。', '永久刪除', true)) return;
+      state.trash = state.trash.filter((x) => x.id !== t.id);
     }
     save(); renderAll(); return;
   }
@@ -787,14 +818,17 @@ document.addEventListener('click', (ev) => {
   if (!t) return;
   if (act === 'close') {
     if (lastPrice == null) return toast('還沒有即時價格');
-    if (!confirm(`以現價 ${fmtPx(lastPrice)} 平倉？`)) return;
+    if (!await ask('以現價平倉？', `以目前價格 ${fmtPx(lastPrice)} 平倉這張${t.side === 'long' ? '多' : '空'}單。`, '平倉')) return;
+    if (t.status !== 'open') return toast('這張單已經結單了');
     closeTrade(t, lastPrice, Date.now(), 'manual');
   } else if (act === 'be') {
     t.sl = t.entry; t.closeNote = undefined;
     toast('止損已移到進場價');
   } else if (act === 'edit') {
-    const s = num(prompt('新的止損價', t.sl)); if (s == null) return;
-    const p = num(prompt('新的止盈價', t.tp)); if (p == null) return;
+    const v = await openDialog({ title: '改止盈止損', fields: [{ label: '止損價', value: t.sl }, { label: '止盈價', value: t.tp }], ok: '儲存' });
+    if (!v) return;
+    if (t.status !== 'open' && t.status !== 'pending') return toast('這張單已經結單了');
+    const [s, p] = v;
     const L = t.side === 'long';
     if (L ? !(p > s) : !(p < s)) return toast('止盈止損方向不對');
     t.sl = s; t.tp = p;
@@ -831,7 +865,7 @@ $('importFile').onchange = async (ev) => {
   try {
     const s = JSON.parse(await f.text());
     if (!s.trades || !s.settings) throw new Error('格式不對');
-    if (!confirm(`匯入 ${s.trades.length} 筆紀錄，會覆蓋目前資料，確定？`)) return;
+    if (!await ask('匯入備份？', `匯入 ${s.trades.length} 筆紀錄，會覆蓋目前所有資料。`, '匯入並覆蓋', true)) return;
     s.trash = s.trash || [];
     state = s; selected.clear(); save(); renderSettings(); renderAll(); backfill();
     toast('匯入完成');
