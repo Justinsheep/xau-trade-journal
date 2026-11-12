@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
 <title>XAU 交易紀錄</title>
 <meta name="theme-color" content="#0f1115">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -84,6 +84,19 @@
 </main>
 
 <main id="page-settings" class="page hidden">
+  <section class="card" id="syncCard">
+    <div class="row between">
+      <h2>☁️ 手機電腦同步</h2>
+      <span class="syncst" id="syncState"></span>
+    </div>
+    <p class="muted" id="syncInfo">用 Google 帳號登入後，手機和電腦的紀錄會自動同步（跟你的資產 App 是同一個帳號）。</p>
+    <div class="row gap">
+      <button class="primary" id="loginBtn" style="width:auto;margin:0;padding:10px 18px">用 Google 登入</button>
+      <button class="ghost small hidden" id="syncNowBtn">立即同步</button>
+      <button class="ghost small hidden" id="logoutBtn">登出</button>
+    </div>
+  </section>
+
   <section class="card">
     <h2>帳戶與風險</h2>
     <div class="grid2">
@@ -162,6 +175,9 @@
 </main>
 
 <div id="toast" class="toast"></div>
-<script src="app.js?v=7"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="merge.js?v=8"></script>
+<script src="app.js?v=8"></script>
+<script src="sync.js?v=8"></script>
 </body>
 </html>

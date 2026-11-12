@@ -28,14 +28,50 @@ let lastTickTs = 0;
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (s && s.trades) { s.trash = s.trash || []; return s; }
+    if (s && s.trades) { s.trash = s.trash || []; s.purged = s.purged || {}; return s; }
   } catch (e) {}
-  return { settings: { initial: 100, riskPct: 10 }, trades: [], trash: [] };
+  return { settings: { initial: 100, riskPct: 10 }, trades: [], trash: [], purged: {} };
 }
 const selected = new Set(); // 歷史紀錄多選
+/* 變更偵測：每筆單內容（不含 lastChecked）有變就蓋上 updatedAt，消失的單記到 purged，給雲端同步用 */
+let snap = new Map();
+function resetSnap() {
+  snap = new Map();
+  for (const t of [...state.trades, ...state.trash]) snap.set(t.id, stripKey(t));
+  snap.set('__settings', JSON.stringify(state.settings));
+}
+function stampChanges() {
+  const now = Date.now();
+  let changed = false;
+  const seen = new Set();
+  state.purged = state.purged || {};
+  for (const t of [...state.trades, ...state.trash]) {
+    seen.add(t.id);
+    const k = stripKey(t);
+    if (snap.get(t.id) !== k) { t.updatedAt = now; snap.set(t.id, k); changed = true; }
+  }
+  for (const id of [...snap.keys()]) {
+    if (id !== '__settings' && !seen.has(id)) { state.purged[id] = now; snap.delete(id); changed = true; }
+  }
+  const sk = JSON.stringify(state.settings);
+  if (snap.get('__settings') !== sk) { state.settingsUpdatedAt = now; snap.set('__settings', sk); changed = true; }
+  return changed;
+}
+resetSnap();
+// 雲端拉下來合併後的資料：直接採用，不蓋新的 updatedAt
+function adoptState(s) {
+  state = s;
+  resetSnap();
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
 let saveTimer = null;
 function save(now = true) {
-  const doSave = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} };
+  const doSave = () => {
+    const changed = stampChanges();
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+    if (changed && window.onLocalChange) window.onLocalChange();
+  };
   if (now) { clearTimeout(saveTimer); saveTimer = null; doSave(); }
   else if (!saveTimer) saveTimer = setTimeout(() => { saveTimer = null; doSave(); }, 3000);
 }
@@ -242,6 +278,13 @@ let backfilling = false, lastBackfillTry = 0;
 async function backfill() {
   if (backfilling || Date.now() - lastBackfillTry < 8000) return;
   lastBackfillTry = Date.now();
+  // 有登入雲端時，先等第一次同步完，避免用舊資料回補
+  if (window.initialSync) {
+    backfilling = true;
+    try { await window.initialSync; } catch (e) {}
+    backfilling = false;
+  }
+  const base = state;
   const active = state.trades.filter((t) => t.status === 'open' || t.status === 'pending');
   if (!active.length) return;
   const now = Date.now();
@@ -278,6 +321,13 @@ async function backfill() {
       }
       if ((t.status === 'open' || t.status === 'pending') && candles.length) {
         t.lastChecked = Math.max(t.lastChecked || 0, candles[candles.length - 1].ts);
+      }
+    }
+    // 回補期間雲端同步換掉了 state：把結果套回目前的同一筆單（那筆單在別台還沒結單才套）
+    if (state !== base) {
+      for (const t of stale) {
+        const cur = state.trades.find((x) => x.id === t.id);
+        if (cur && (cur.status === 'open' || cur.status === 'pending')) Object.assign(cur, t);
       }
     }
     save();
@@ -873,6 +923,7 @@ $('importFile').onchange = async (ev) => {
     if (!s.trades || !s.settings) throw new Error('格式不對');
     if (!await ask('匯入備份？', `匯入 ${s.trades.length} 筆紀錄，會覆蓋目前所有資料。`, '匯入並覆蓋', true)) return;
     s.trash = s.trash || [];
+    s.purged = s.purged || {};
     state = s; selected.clear(); save(); renderSettings(); renderAll(); backfill();
     toast('匯入完成');
   } catch (e) { toast('匯入失敗：' + e.message); }
@@ -908,7 +959,7 @@ renderAll();
 route();
 initChart();
 connectWS();
-backfill();
+setTimeout(backfill, 0); // 等 sync.js 設好 initialSync 再回補
 setInterval(backfill, 30e3);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) backfill(); });
 window.addEventListener('resize', () => {
