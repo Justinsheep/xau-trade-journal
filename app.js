@@ -476,7 +476,7 @@ function tradeCard(t, mode = 'list') {
   const L = t.side === 'long';
   const closed = t.status === 'closed';
   const inTrash = mode === 'trash';
-  const st = t.status === 'pending' ? '掛單中' : t.status === 'open' ? '持倉中' : t.reason === 'TP' ? '止盈' : t.reason === 'SL' ? (t.pnl > 0 ? '移動止損' : t.pnl === 0 ? '保本' : '止損') : '手動平倉';
+  const st = t.status === 'pending' ? '掛單中' : t.status === 'open' ? '持倉中' : t.reason === 'TP' ? '止盈' : t.reason === 'SL' ? (t.pnl > 0 ? '移動止損' : t.pnl === 0 ? '保本' : '止損') : t.reason === 'BE' ? '保本' : '手動平倉';
   const stCls = closed ? (t.pnl > 0 ? 'b-win' : t.pnl < 0 ? 'b-loss' : 'b-st') : 'b-st';
   const right = closed
     ? `<span class="pnl ${cls(t.pnl)}">${sign(t.pnl)} U <small>(${sign(t.pnl / t.risk)}R)</small></span>`
@@ -501,7 +501,7 @@ function tradeCard(t, mode = 'list') {
   const delInfo = inTrash ? `<span class="muted">刪除於 ${fmtTime(t.deletedAt)}</span>` : '';
   return `<div class="trade${selected.has(t.id) && mode === 'hist' ? ' sel' : ''}${inTrash ? ' trashed' : ''}">
     <div class="head">
-      <div class="row gap">${pick}<span class="badge ${L ? 'b-long' : 'b-short'}">${L ? '多' : '空'}</span>${delInfo}<span class="badge ${stCls}">${st}</span><span class="muted">${fmtTime(closed ? t.closedAt : t.createdAt)}</span></div>
+      <div class="row gap">${pick}<span class="badge ${L ? 'b-long' : 'b-short'}">${L ? '多' : '空'}</span>${delInfo}<span class="badge ${stCls}">${st}</span>${t.imported ? '<span class="badge b-st">補登</span>' : ''}<span class="muted">${fmtTime(closed ? t.closedAt : t.createdAt)}</span></div>
       ${right}
     </div>
     <div class="kv">${kv.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>
@@ -531,6 +531,161 @@ function renderLists() {
   tab.innerHTML = '⚙️ 設定' + (trash.length ? `<span class="cnt" title="垃圾桶">${trash.length}</span>` : '');
   renderOpenPnl();
 }
+
+/* ========== 補登過去的單 ========== */
+// 某個時間點的帳戶最高點（只算那之前已結單的）
+function peakAt(ts, extra = []) {
+  const closed = [...state.trades.filter(isClosed), ...extra].filter((t) => t.closedAt <= ts).sort((a, b) => a.closedAt - b.closedAt);
+  let eq = state.settings.initial, peak = eq;
+  for (const t of closed) { eq += t.pnl; peak = Math.max(peak, eq); }
+  return peak;
+}
+function parseTime(s) {
+  const m = String(s || '').trim().replace(/\//g, '-').match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+  return isNaN(d) ? null : d.getTime();
+}
+function parseResult(s) {
+  const v = String(s || '').trim().toLowerCase();
+  if (['止盈', 'tp', 'win', '贏', '盈'].includes(v)) return { result: 'TP' };
+  if (['止損', 'sl', 'loss', '輸', '損'].includes(v)) return { result: 'SL' };
+  if (['保本', 'be', '平'].includes(v)) return { result: 'BE' };
+  const n = num(v);
+  return n > 0 ? { result: 'PX', exit: n } : null;
+}
+// 回傳 { trade } 或 { err }
+function buildPast(r, extra = []) {
+  const { open, entry, sl, tp } = r;
+  const close = r.close ?? open;
+  if (!open) return { err: '進場時間格式不對' };
+  if (!close) return { err: '出場時間格式不對' };
+  if (close < open) return { err: '出場時間早於進場時間' };
+  if (close > Date.now()) return { err: '出場時間在未來' };
+  if (!(entry > 0 && sl > 0 && tp > 0)) return { err: '進場 / 止損 / 止盈要填數字' };
+  const side = sl < entry ? 'long' : sl > entry ? 'short' : null;
+  if (!side) return { err: '止損不能等於進場價' };
+  if (side === 'long' && !(tp > entry)) return { err: '做多時止盈要高於進場價' };
+  if (side === 'short' && !(tp < entry)) return { err: '做空時止盈要低於進場價' };
+  if (!r.result) return { err: '結果要填 止盈 / 止損 / 保本 或出場價' };
+  const exit = r.result === 'TP' ? tp : r.result === 'SL' ? sl : r.result === 'BE' ? entry : r.exit;
+  if (!(exit > 0)) return { err: '出場價要填數字' };
+  const slDist = Math.abs(entry - sl);
+  const peak = peakAt(open, extra);
+  const risk = r.risk > 0 ? r.risk : peak * state.settings.riskPct / 100;
+  const qty = risk / slDist;
+  const t = {
+    id: uid(), createdAt: open, orderType: 'market', side,
+    entry, sl, tp, slOrig: sl, rr: Math.abs(tp - entry) / slDist,
+    risk, qty, contracts: Math.floor(qty / CT_VAL), notional: qty * entry,
+    peakAtOpen: peak, status: 'closed', openedAt: open, closedAt: close,
+    exit, reason: r.result === 'PX' ? 'manual' : r.result, lastChecked: close,
+    note: r.note || '', imported: true, autoRisk: !(r.risk > 0),
+  };
+  t.pnl = pnlAt(t, exit);
+  return { trade: t };
+}
+
+const toLocalInput = (ts) => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60e3); return d.toISOString().slice(0, 16); };
+function readOne() {
+  return {
+    open: $('bOpen').value ? new Date($('bOpen').value).getTime() : null,
+    close: $('bClose').value ? new Date($('bClose').value).getTime() : undefined,
+    entry: num($('bEntry').value), sl: num($('bSl').value), tp: num($('bTp').value),
+    result: $('bResult').value, exit: num($('bExit').value),
+    risk: num($('bRisk').value), note: $('bNote').value.trim(),
+  };
+}
+function renderOnePreview() {
+  $('bExitWrap').classList.toggle('hidden', $('bResult').value !== 'PX');
+  const r = readOne();
+  const box = $('bPreview');
+  if (!r.open && !r.entry && !r.sl && !r.tp) { box.innerHTML = ''; $('bSubmit').disabled = true; return; }
+  const { trade: t, err } = buildPast(r);
+  if (err) { box.innerHTML = `<div class="err">${err}</div>`; $('bSubmit').disabled = true; return; }
+  box.innerHTML = `
+    <div><span>方向</span><b class="${t.side === 'long' ? 'up' : 'down'}">${t.side === 'long' ? '做多' : '做空'}</b></div>
+    <div><span>RR</span><b>${fmt(t.rr)}</b></div>
+    <div><span>風險${t.autoRisk ? '（自動）' : ''}</span><b class="down">${fmt(t.risk)} U</b></div>
+    <div><span>當時帳戶最高點</span><b>${fmt(t.peakAtOpen)} U</b></div>
+    <div><span>名義價值</span><b>${fmt(t.notional)} U</b></div>
+    <div><span>損益</span><b class="${cls(t.pnl)}">${sign(t.pnl)} U (${sign(t.pnl / t.risk)}R)</b></div>`;
+  $('bSubmit').disabled = false;
+}
+['bOpen', 'bClose', 'bEntry', 'bSl', 'bTp', 'bResult', 'bExit', 'bRisk'].forEach((id) => {
+  $(id).addEventListener('input', renderOnePreview);
+  $(id).addEventListener('change', renderOnePreview);
+});
+$('bfOne').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const { trade, err } = buildPast(readOne());
+  if (err) return toast(err);
+  state.trades.push(trade);
+  save(); renderAll();
+  ['bEntry', 'bSl', 'bTp', 'bExit', 'bRisk', 'bNote'].forEach((id) => { $(id).value = ''; });
+  renderOnePreview();
+  toast(`已加入歷史紀錄：${sign(trade.pnl)} U`);
+});
+document.querySelectorAll('#bfMode button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('#bfMode button').forEach((x) => x.classList.toggle('on', x === b));
+  $('bfOne').classList.toggle('hidden', b.dataset.v !== 'one');
+  $('bfBulk').classList.toggle('hidden', b.dataset.v !== 'bulk');
+});
+
+let bulkTrades = [];
+function parseBulk() {
+  const lines = $('bulkText').value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  lines.forEach((line, i) => {
+    const c = line.split(line.includes('\t') ? '\t' : ',').map((x) => x.trim());
+    if (i === 0 && !parseTime(c[0])) return; // 標題列
+    const res = parseResult(c[5]);
+    rows.push({
+      line: i + 1, raw: c,
+      open: parseTime(c[0]), close: c[1] ? parseTime(c[1]) : parseTime(c[0]),
+      entry: num(c[2]), sl: num(c[3]), tp: num(c[4]),
+      result: res && res.result, exit: res && res.exit,
+      risk: num(c[6]), note: c.slice(7).join(', '),
+    });
+  });
+  // 照進場時間依序算，前面補登的單會影響後面的帳戶最高點
+  const extra = [];
+  const out = [];
+  for (const r of [...rows].sort((a, b) => (a.open || 0) - (b.open || 0))) {
+    const b = buildPast(r, extra);
+    if (b.trade) extra.push(b.trade);
+    out.push({ ...r, ...b });
+  }
+  return out.sort((a, b) => a.line - b.line);
+}
+function renderBulk() {
+  const rows = parseBulk();
+  bulkTrades = rows.filter((r) => r.trade).map((r) => r.trade);
+  const bad = rows.filter((r) => r.err).length;
+  if (!rows.length) { $('bulkPreview').innerHTML = ''; $('bulkSubmit').disabled = true; return; }
+  const tot = bulkTrades.reduce((s, t) => s + t.pnl, 0);
+  $('bulkPreview').innerHTML = `
+    <p class="muted" style="margin:10px 0 0">可加入 <b>${bulkTrades.length}</b> 筆${bad ? `，<span class="down">${bad} 筆有錯誤（不會加入）</span>` : ''}，合計 <b class="${cls(tot)}">${sign(tot)} U</b></p>
+    <div class="bwrap"><table class="btable">
+      <tr><th>行</th><th>進場時間</th><th>方向</th><th>進場</th><th>止損</th><th>止盈</th><th>出場</th><th>風險</th><th>損益</th></tr>
+      ${rows.map((r) => r.err
+        ? `<tr class="bad"><td>${r.line}</td><td colspan="8">⚠ ${r.err}：${escapeHtml(r.raw.join(', '))}</td></tr>`
+        : `<tr><td>${r.line}</td><td>${fmtTime(r.trade.openedAt)}</td><td class="${r.trade.side === 'long' ? 'up' : 'down'}">${r.trade.side === 'long' ? '多' : '空'}</td><td>${fmtPx(r.trade.entry)}</td><td>${fmtPx(r.trade.sl)}</td><td>${fmtPx(r.trade.tp)}</td><td>${fmtPx(r.trade.exit)}</td><td>${fmt(r.trade.risk)}${r.trade.autoRisk ? '*' : ''}</td><td class="${cls(r.trade.pnl)}">${sign(r.trade.pnl)}</td></tr>`).join('')}
+    </table></div>
+    <p class="muted">* 風險依規則自動計算</p>`;
+  $('bulkSubmit').disabled = !bulkTrades.length;
+  $('bulkSubmit').textContent = bulkTrades.length ? `全部加入（${bulkTrades.length} 筆）` : '全部加入';
+}
+$('bulkText').addEventListener('input', renderBulk);
+$('bulkSubmit').onclick = () => {
+  if (!bulkTrades.length) return;
+  if (!confirm(`把 ${bulkTrades.length} 筆加入歷史紀錄？`)) return;
+  const n = bulkTrades.length;
+  state.trades.push(...bulkTrades);
+  save(); renderAll();
+  $('bulkText').value = ''; renderBulk();
+  toast(`已加入 ${n} 筆歷史紀錄`);
+};
 
 /* ========== 垃圾桶 ========== */
 function moveToTrash(ids) {

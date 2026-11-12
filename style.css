@@ -68,6 +68,15 @@ label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute
 .tabs a{flex:1;text-align:center;text-decoration:none;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px;font-weight:600;font-size:14px}
 .tabs a.on{color:var(--text);border-color:var(--accent);background:#1b2740}
 .tabs .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:99px;background:var(--down);color:#fff;font-size:11px;line-height:18px}
+select,textarea{font:inherit;color:var(--text);background:#0f1218;border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0}
+textarea{resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:13px}
+input[type=datetime-local]{color-scheme:dark}
+code{background:#12151b;border-radius:4px;padding:1px 5px;font-size:12px;color:var(--text)}
+.btable{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;font-variant-numeric:tabular-nums}
+.btable th,.btable td{border-bottom:1px solid var(--line);padding:5px 4px;text-align:left;white-space:nowrap}
+.btable th{color:var(--muted);font-weight:500}
+.btable tr.bad td{color:var(--down)}
+.bwrap{overflow-x:auto}
 .danger{color:var(--down);border-color:rgba(239,68,68,.4)}
 button:disabled{opacity:.4;cursor:not-allowed}
 .selbar{margin-bottom:8px}

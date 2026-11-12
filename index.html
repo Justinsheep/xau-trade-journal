@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
 <title>XAU 交易紀錄</title>
 <meta name="theme-color" content="#0f1115">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -98,6 +98,45 @@
   </section>
 
   <section class="card">
+    <h2>補登過去的單</h2>
+    <p class="muted">已經結束的單直接記成歷史紀錄。風險金額留空＝照規則用當時的帳戶最高點 × 風險% 自動算；填了就用你填的（例如當時實際虧損金額）。</p>
+    <div class="seg" id="bfMode">
+      <button type="button" data-v="one" class="on">單筆</button>
+      <button type="button" data-v="bulk">批次貼上</button>
+    </div>
+    <form id="bfOne" autocomplete="off">
+      <div class="grid2">
+        <label>進場時間<input type="datetime-local" id="bOpen"></label>
+        <label>出場時間<input type="datetime-local" id="bClose"></label>
+        <label>進場價<input id="bEntry" inputmode="decimal" placeholder="0.0"></label>
+        <label>止損價<input id="bSl" inputmode="decimal" placeholder="0.0"></label>
+        <label>止盈價<input id="bTp" inputmode="decimal" placeholder="0.0"></label>
+        <label>結果
+          <select id="bResult">
+            <option value="TP">止盈</option>
+            <option value="SL">止損</option>
+            <option value="BE">保本（出場 = 進場價）</option>
+            <option value="PX">其他出場價…</option>
+          </select>
+        </label>
+        <label id="bExitWrap" class="hidden">出場價<input id="bExit" inputmode="decimal" placeholder="0.0"></label>
+        <label>風險金額 U（選填）<input id="bRisk" inputmode="decimal" placeholder="自動"></label>
+      </div>
+      <label>備註<input id="bNote" placeholder="選填"></label>
+      <div id="bPreview" class="preview"></div>
+      <button type="submit" class="primary" id="bSubmit" disabled>加入歷史紀錄</button>
+    </form>
+    <div id="bfBulk" class="hidden">
+      <p class="muted">一行一筆，用逗號或 Tab 分隔（可以直接從 Excel / Google 試算表複製貼上，第一行是標題也沒關係）：<br>
+      <code>進場時間, 出場時間, 進場價, 止損價, 止盈價, 結果, 風險U(選填), 備註(選填)</code><br>
+      結果填 <code>止盈</code> / <code>止損</code> / <code>保本</code>（或 TP / SL / BE），或直接填出場價。時間格式如 <code>2026-10-01 14:30</code>。</p>
+      <textarea id="bulkText" rows="7" placeholder="2026-10-01 14:30, 2026-10-01 18:05, 3850, 3840, 3865, 止盈&#10;2026-10-02 09:10, 2026-10-02 10:00, 3880, 3895, 3850, 止損, 12, 追空"></textarea>
+      <div id="bulkPreview"></div>
+      <button type="button" class="primary" id="bulkSubmit" disabled>全部加入</button>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>資料備份</h2>
     <p class="muted">資料存在這個瀏覽器，換裝置或清快取前請先匯出；匯入會覆蓋目前資料。</p>
     <div class="row gap">
@@ -120,6 +159,6 @@
 </main>
 
 <div id="toast" class="toast"></div>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
