@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
+<title>XAU 交易紀錄</title>
+<meta name="theme-color" content="#0f1115">
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="ticker">
+    <div class="sym">XAU-USDT 永續 <span id="connDot" class="dot" title="連線狀態"></span></div>
+    <div class="px" id="lastPx">—</div>
+    <div class="chg" id="chg24">—</div>
+  </div>
+  <div class="hl">
+    <div><span>24h 高</span><b id="hi24">—</b></div>
+    <div><span>24h 低</span><b id="lo24">—</b></div>
+  </div>
+</header>
+
+<main>
+  <section class="card stats" id="stats"></section>
+
+  <section class="card">
+    <div class="row between">
+      <div class="tfs" id="tfs">
+        <button data-bar="1m">1m</button><button data-bar="5m" class="on">5m</button><button data-bar="15m">15m</button><button data-bar="1H">1H</button><button data-bar="4H">4H</button>
+      </div>
+      <button class="ghost small" id="toggleEquity">權益曲線</button>
+    </div>
+    <div id="chart" class="chart"></div>
+    <div id="equityChart" class="chart hidden"></div>
+  </section>
+
+  <section class="card">
+    <h2>新增訂單</h2>
+    <form id="orderForm" autocomplete="off">
+      <div class="seg" id="orderType">
+        <button type="button" data-v="market" class="on">已進場（市價）</button>
+        <button type="button" data-v="limit">掛單（觸價才成交）</button>
+      </div>
+      <div class="grid2">
+        <label>進場價
+          <div class="inwrap"><input id="fEntry" inputmode="decimal" placeholder="0.0"><button type="button" class="ghost small" id="useLast">現價</button></div>
+        </label>
+        <label>止損價<input id="fSl" inputmode="decimal" placeholder="0.0"></label>
+        <label>止盈價<input id="fTp" inputmode="decimal" placeholder="0.0"></label>
+        <label>RR 比<input id="fRr" inputmode="decimal" placeholder="1.5"></label>
+      </div>
+      <label>備註<input id="fNote" placeholder="選填"></label>
+      <div id="preview" class="preview"></div>
+      <button type="submit" class="primary" id="submitBtn">送出紀錄</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="row between">
+      <h2>持倉 / 掛單</h2>
+    </div>
+    <div id="openList" class="list"></div>
+  </section>
+
+  <section class="card">
+    <div class="row between">
+      <h2>歷史紀錄</h2>
+      <div class="row gap">
+        <button class="ghost small" id="exportBtn">匯出</button>
+        <label class="ghost small filebtn">匯入<input type="file" id="importFile" accept="application/json"></label>
+      </div>
+    </div>
+    <div id="histList" class="list"></div>
+  </section>
+
+  <section class="card">
+    <h2>設定</h2>
+    <div class="grid2">
+      <label>起始資金 (U)<input id="sInitial" inputmode="decimal"></label>
+      <label>每單風險 (% of 帳戶最高點)<input id="sRisk" inputmode="decimal"></label>
+    </div>
+    <p class="muted">每單虧損 = 帳戶最高點 × 風險%；獲利 = 虧損 × RR。帳戶最高點 = 起始資金加上歷史已結單損益的最高值。資料存在這個瀏覽器，換裝置請用匯出／匯入。</p>
+    <button class="ghost small" id="notifyBtn">開啟結單通知</button>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
