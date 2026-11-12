@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
 <title>XAU 交易紀錄</title>
 <meta name="theme-color" content="#0f1115">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -106,8 +106,8 @@
     </div>
     <form id="bfOne" autocomplete="off">
       <div class="grid2">
-        <label>進場時間<input type="datetime-local" id="bOpen"></label>
-        <label>出場時間<input type="datetime-local" id="bClose"></label>
+        <label class="tfield">進場時間<div class="dt"><input type="date" id="bOpenD"><select id="bOpenT" class="tsel"></select></div></label>
+        <label class="tfield">出場時間<div class="dt"><input type="date" id="bCloseD"><select id="bCloseT" class="tsel"></select></div></label>
         <label>進場價<input id="bEntry" inputmode="decimal" placeholder="0.0"></label>
         <label>止損價<input id="bSl" inputmode="decimal" placeholder="0.0"></label>
         <label>止盈價<input id="bTp" inputmode="decimal" placeholder="0.0"></label>
@@ -159,6 +159,6 @@
 </main>
 
 <div id="toast" class="toast"></div>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

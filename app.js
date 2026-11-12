@@ -586,11 +586,23 @@ function buildPast(r, extra = []) {
   return { trade: t };
 }
 
-const toLocalInput = (ts) => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60e3); return d.toISOString().slice(0, 16); };
+// 補登時間：日期 + 15 分鐘為單位的時間選單
+document.querySelectorAll('select.tsel').forEach((sel) => {
+  const p2 = (x) => String(x).padStart(2, '0');
+  let html = '';
+  for (let m = 0; m < 1440; m += 15) html += `<option value="${p2(m / 60 | 0)}:${p2(m % 60)}">${p2(m / 60 | 0)}:${p2(m % 60)}</option>`;
+  sel.innerHTML = html;
+});
+// 選了進場日期、出場日期還空著時，帶入同一天
+$('bOpenD').addEventListener('change', () => { if (!$('bCloseD').value) $('bCloseD').value = $('bOpenD').value; });
+function dtValue(prefix) {
+  const d = $(prefix + 'D').value, t = $(prefix + 'T').value;
+  return d ? parseTime(`${d} ${t || '00:00'}`) : null;
+}
 function readOne() {
   return {
-    open: $('bOpen').value ? new Date($('bOpen').value).getTime() : null,
-    close: $('bClose').value ? new Date($('bClose').value).getTime() : undefined,
+    open: dtValue('bOpen'),
+    close: $('bCloseD').value ? dtValue('bClose') : undefined,
     entry: num($('bEntry').value), sl: num($('bSl').value), tp: num($('bTp').value),
     result: $('bResult').value, exit: num($('bExit').value),
     risk: num($('bRisk').value), note: $('bNote').value.trim(),
@@ -612,7 +624,7 @@ function renderOnePreview() {
     <div><span>損益</span><b class="${cls(t.pnl)}">${sign(t.pnl)} U (${sign(t.pnl / t.risk)}R)</b></div>`;
   $('bSubmit').disabled = false;
 }
-['bOpen', 'bClose', 'bEntry', 'bSl', 'bTp', 'bResult', 'bExit', 'bRisk'].forEach((id) => {
+['bOpenD', 'bOpenT', 'bCloseD', 'bCloseT', 'bEntry', 'bSl', 'bTp', 'bResult', 'bExit', 'bRisk'].forEach((id) => {
   $(id).addEventListener('input', renderOnePreview);
   $(id).addEventListener('change', renderOnePreview);
 });
